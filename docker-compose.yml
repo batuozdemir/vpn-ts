@@ -11,6 +11,7 @@ services:
       - ./gluetun:/gluetun
       - ./setup-gluetun.sh:/setup-gluetun.sh
       - ./gluetun-entrypoint.sh:/gluetun-entrypoint.sh
+      - ./healthcheck.sh:/healthcheck.sh
     entrypoint: /gluetun-entrypoint.sh
     environment:
       # --- Add your Gluetun variables below ---

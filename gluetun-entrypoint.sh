@@ -18,5 +18,8 @@ echo "VPN connected!"
 # Apply our custom iptables rules
 /setup-gluetun.sh
 
+# Start health check
+/healthcheck.sh &
+
 # Wait for Gluetun process
 wait $GLUETUN_PID
