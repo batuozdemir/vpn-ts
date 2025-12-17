@@ -9,9 +9,12 @@ CHECK_INTERVAL=60
 PING_TIMEOUT=5
 RETRY_DELAY=3
 MAX_RETRIES=2
+INITIAL_DELAY=15
 
 echo "Starting connectivity health check..."
 echo "Target: $TARGET_HOST"
+echo "waiting ${INITIAL_DELAY}s before starting..."
+sleep $INITIAL_DELAY
 echo "Interval: ${CHECK_INTERVAL}s"
 
 while true; do

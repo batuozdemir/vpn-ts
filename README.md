@@ -60,4 +60,7 @@ tailscale set --exit-node=
 
 - ✅ Works after restart (`docker-compose down && up`)
 - ✅ iptables rules applied automatically
+- ✅ Works after restart (`docker-compose down && up`)
+- ✅ iptables rules applied automatically
 - ✅ Peer-to-peer Tailscale traffic bypasses VPN
+- ✅ Auto-restart on connectivity loss (Health check)
