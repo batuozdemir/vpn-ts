@@ -1,0 +1,69 @@
+# docker-compose.yml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./gluetun:/gluetun
+      - ./setup-gluetun.sh:/setup-gluetun.sh
+      - ./gluetun-entrypoint.sh:/gluetun-entrypoint.sh
+    entrypoint: /gluetun-entrypoint.sh
+    environment:
+      # --- Add your Gluetun variables below ---
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - VPN_PORT_FORWARDING=on
+      # --- Critical firewall settings for acting as a gateway ---
+      - FIREWALL_OUTBOUND_SUBNETS=172.28.0.0/24,100.64.0.0/10
+      - FIREWALL_INPUT_PORTS=51820
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
+      # Disable Gluetun's built-in firewall to allow manual configuration
+      - FIREWALL=off
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    networks:
+      vpn-net:
+        ipv4_address: 172.28.0.2 # Static IP for Gluetun
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.conf.all.rp_filter=0
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./tailscale:/var/lib/tailscale
+      - ./start-tailscale.sh:/start-tailscale.sh
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME}
+      - TS_EXTRA_ARGS=--advertise-exit-node
+    entrypoint: /start-tailscale.sh
+    networks:
+      vpn-net:
+        ipv4_address: 172.28.0.3 # Static IP for Tailscale
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+
+networks:
+  vpn-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

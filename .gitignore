@@ -1,0 +1,6 @@
+# Secrets - DO NOT COMMIT
+.env
+
+
+.DS_Store
+._*
