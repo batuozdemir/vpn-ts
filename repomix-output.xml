@@ -1,0 +1,386 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.env.example
+.geminiignore
+.gitignore
+docker-compose.yml
+gluetun-entrypoint.sh
+healthcheck.sh
+README.md
+setup-gluetun.sh
+start-tailscale.sh
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".env.example">
+# VPN Configuration
+WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here
+SERVER_COUNTRIES=Ireland
+
+# Tailscale Configuration
+TS_AUTHKEY=your_tailscale_auth_key_here
+TS_HOSTNAME=vpn-exit-node
+</file>
+
+<file path=".geminiignore">
+.env
+</file>
+
+<file path=".gitignore">
+# Secrets - DO NOT COMMIT
+.env
+
+
+.DS_Store
+._*
+</file>
+
+<file path="docker-compose.yml">
+# docker-compose.yml
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./gluetun:/gluetun
+      - ./setup-gluetun.sh:/setup-gluetun.sh
+      - ./gluetun-entrypoint.sh:/gluetun-entrypoint.sh
+      - ./healthcheck.sh:/healthcheck.sh
+    entrypoint: /gluetun-entrypoint.sh
+    environment:
+      # --- Add your Gluetun variables below ---
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - VPN_PORT_FORWARDING=on
+      # --- Critical firewall settings for acting as a gateway ---
+      - FIREWALL_OUTBOUND_SUBNETS=172.28.0.0/24,100.64.0.0/10
+      - FIREWALL_INPUT_PORTS=51820
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
+      # Disable Gluetun's built-in firewall to allow manual configuration
+      - FIREWALL=off
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    networks:
+      vpn-net:
+        ipv4_address: 172.28.0.2 # Static IP for Gluetun
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.conf.all.rp_filter=0
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./tailscale:/var/lib/tailscale
+      - ./start-tailscale.sh:/start-tailscale.sh
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME}
+      - TS_EXTRA_ARGS=--advertise-exit-node
+    entrypoint: /start-tailscale.sh
+    networks:
+      vpn-net:
+        ipv4_address: 172.28.0.3 # Static IP for Tailscale
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+
+networks:
+  vpn-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+</file>
+
+<file path="gluetun-entrypoint.sh">
+#!/bin/sh
+# Custom entrypoint that runs Gluetun's default entrypoint
+# and then applies our custom iptables rules
+
+echo "Starting Gluetun with custom routing setup..."
+
+# Start Gluetun in the background
+/gluetun-entrypoint &
+GLUETUN_PID=$!
+
+# Wait for tun0 to be ready
+echo "Waiting for VPN connection (tun0)..."
+while ! ip link show tun0 >/dev/null 2>&1; do
+  sleep 1
+done
+echo "VPN connected!"
+
+# Apply our custom iptables rules
+/setup-gluetun.sh
+
+# Start health check
+/healthcheck.sh &
+
+# Wait for Gluetun process
+wait $GLUETUN_PID
+</file>
+
+<file path="healthcheck.sh">
+#!/bin/sh
+
+# Health check script for Gluetun
+# Pings a reliable host to check for internet connectivity.
+# If connectivity is lost, it kills the container so Docker can restart it.
+
+TARGET_HOST="1.1.1.1"
+CHECK_INTERVAL=60
+PING_TIMEOUT=5
+RETRY_DELAY=3
+MAX_RETRIES=2
+INITIAL_DELAY=15
+
+echo "Starting connectivity health check..."
+echo "Target: $TARGET_HOST"
+echo "waiting ${INITIAL_DELAY}s before starting..."
+sleep $INITIAL_DELAY
+echo "Interval: ${CHECK_INTERVAL}s"
+
+while true; do
+  # Try to ping
+  if ! ping -c 1 -W $PING_TIMEOUT $TARGET_HOST >/dev/null 2>&1; then
+    echo "$(date): Ping failed. Retrying in ${RETRY_DELAY}s..."
+    sleep $RETRY_DELAY
+
+    # Retry 1
+    if ! ping -c 1 -W $PING_TIMEOUT $TARGET_HOST >/dev/null 2>&1; then
+       echo "$(date): Retry 1 failed. Retrying in ${RETRY_DELAY}s..."
+       sleep $RETRY_DELAY
+
+       # Retry 2 (Total failure condition reached)
+       if ! ping -c 1 -W $PING_TIMEOUT $TARGET_HOST >/dev/null 2>&1; then
+         echo "$(date): connectivity lost (failed 3 times). Killing container..."
+         # Kill the main process (PID 1) to trigger a container restart
+         kill 1
+         exit 1
+       fi
+    fi
+    echo "$(date): Connectivity recovered."
+  fi
+
+  sleep $CHECK_INTERVAL
+done
+</file>
+
+<file path="README.md">
+# Tailscale Exit Node with VPN Routing
+
+Routes Tailscale exit node traffic through Gluetun VPN (ProtonVPN Ireland).
+
+## Setup
+
+1. Copy `.env.example` to `.env` and fill in your credentials:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your keys
+   ```
+
+2. Start containers:
+   ```bash
+   docker-compose up -d
+   ```
+
+## Quick Start
+
+```bash
+# Start
+docker-compose up -d
+
+# Restart
+docker-compose down && docker-compose up -d
+
+# Check status
+docker exec tailscale tailscale status
+docker exec gluetun wget -qO- https://ifconfig.co
+```
+
+## Files
+
+- `docker-compose.yml` - Container configuration
+- `start-tailscale.sh` - Tailscale startup with policy routing
+- `setup-gluetun.sh` - Gluetun iptables configuration
+- `gluetun-entrypoint.sh` - Auto-applies iptables on startup
+
+## Usage from Client
+
+```bash
+# Enable exit node
+tailscale set --exit-node=vpn-exit-node
+
+# Verify (should show Ireland VPN IP)
+curl https://ifconfig.co
+
+# Disable
+tailscale set --exit-node=
+```
+
+## How It Works
+
+1. Tailscale container receives exit node traffic
+2. Policy routing (table 100) sends it to Gluetun (172.28.0.2)
+3. Gluetun forwards and NATs traffic through VPN (tun0)
+4. Internet traffic exits via ProtonVPN Ireland
+
+## Notes
+
+- ✅ Works after restart (`docker-compose down && up`)
+- ✅ iptables rules applied automatically
+- ✅ Works after restart (`docker-compose down && up`)
+- ✅ iptables rules applied automatically
+- ✅ Peer-to-peer Tailscale traffic bypasses VPN
+- ✅ Auto-restart on connectivity loss (Health check)
+</file>
+
+<file path="setup-gluetun.sh">
+#!/bin/sh
+# This script runs INSIDE the Gluetun container to configure it as a gateway
+# It sets up iptables rules to forward and NAT traffic from Tailscale through the VPN
+
+set -e
+
+echo "Waiting for tun0 interface..."
+while ! ip link show tun0 >/dev/null 2>&1; do
+  sleep 1
+done
+echo "tun0 is up!"
+
+echo "Setting up Gluetun as a router for Tailscale..."
+
+# IP forwarding is already enabled via sysctls in docker-compose.yml
+# Verify it's enabled
+if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+  echo "WARNING: IP forwarding is not enabled!"
+  exit 1
+fi
+echo "IP forwarding: enabled"
+
+# Flush any existing rules to start clean
+iptables -F FORWARD 2>/dev/null || true
+iptables -t nat -F POSTROUTING 2>/dev/null || true
+
+# Set default FORWARD policy to DROP for security
+iptables -P FORWARD DROP
+
+# Allow forwarding between Docker network and VPN
+iptables -A FORWARD -i eth0 -o tun0 -j ACCEPT
+iptables -A FORWARD -i tun0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Allow forwarding for Tailscale CGNAT range specifically
+iptables -A FORWARD -s 100.64.0.0/10 -o tun0 -j ACCEPT
+iptables -A FORWARD -d 100.64.0.0/10 -i tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# NAT all traffic going out through tun0 (the VPN interface)
+iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
+
+echo "Gluetun routing setup complete!"
+echo ""
+echo "Current FORWARD rules:"
+iptables -L FORWARD -n -v
+echo ""
+echo "Current NAT POSTROUTING rules:"
+iptables -t nat -L POSTROUTING -n -v
+</file>
+
+<file path="start-tailscale.sh">
+#!/bin/sh
+set -e
+GLUETUN_IP=172.28.0.2      # match docker-compose
+
+tailscaled &               # kernel-TUN
+DAEMON_PID=$!
+
+tailscale up \
+  --authkey="$TS_AUTHKEY" \
+  --hostname="$TS_HOSTNAME" \
+  $TS_EXTRA_ARGS \
+  --accept-dns=false
+
+while ! ip link show tailscale0 >/dev/null 2>&1; do sleep 1; done
+
+# Policy routing: Route traffic from tailscale0 through Gluetun
+ip route add default via ${GLUETUN_IP} dev eth0 table 100
+ip rule add from all iif tailscale0 lookup 100 pref 50
+
+# Reverse path filtering is already disabled via sysctls in docker-compose.yml
+# Verify the settings
+echo "Verifying reverse path filtering settings..."
+echo "  all/rp_filter: $(cat /proc/sys/net/ipv4/conf/all/rp_filter)"
+echo "  eth0/rp_filter: $(cat /proc/sys/net/ipv4/conf/eth0/rp_filter)"
+if [ -f /proc/sys/net/ipv4/conf/tailscale0/rp_filter ]; then
+  echo "  tailscale0/rp_filter: $(cat /proc/sys/net/ipv4/conf/tailscale0/rp_filter)"
+fi
+
+# Allow forwarding between tailscale0 and eth0
+iptables -I FORWARD 1 -i tailscale0 -o eth0 -j ACCEPT
+iptables -I FORWARD 2 -i eth0 -o tailscale0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Masquerade traffic going out through eth0 (to Gluetun)
+# This must happen BEFORE Tailscale's own masquerade rules
+iptables -t nat -I POSTROUTING 1 -o eth0 -s 100.64.0.0/10 -j MASQUERADE
+
+wait $DAEMON_PID
+</file>
+
+</files>
