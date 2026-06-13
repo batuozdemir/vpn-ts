@@ -24,11 +24,7 @@ import (
 // malicious value can't be injected. Names are ProtonVPN country names as
 // understood by Gluetun's SERVER_COUNTRIES.
 var allowedCountries = []string{
-	"Australia", "Austria", "Belgium", "Brazil", "Canada", "Czech Republic",
-	"Denmark", "Finland", "France", "Germany", "Hong Kong", "Iceland",
-	"India", "Ireland", "Italy", "Japan", "Netherlands", "Norway", "Poland",
-	"Portugal", "Romania", "Singapore", "Spain", "Sweden", "Switzerland",
-	"Ukraine", "United Kingdom", "United States",
+	"Switzerland", "Ireland",
 }
 
 func isAllowed(c string) bool {
