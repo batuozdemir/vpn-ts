@@ -4,6 +4,15 @@
 
 echo "Starting Gluetun with custom routing setup..."
 
+GLUETUN_PID=""
+term() {
+  echo "Received signal, shutting down Gluetun..."
+  [ -n "$GLUETUN_PID" ] && kill -TERM "$GLUETUN_PID" 2>/dev/null
+  wait "$GLUETUN_PID" 2>/dev/null
+  exit 0
+}
+trap term TERM INT
+
 # Start Gluetun in the background
 /gluetun-entrypoint &
 GLUETUN_PID=$!

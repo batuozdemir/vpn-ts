@@ -1,8 +1,12 @@
 # Secrets - DO NOT COMMIT
 .env
 
+# Runtime state (mounted volumes)
+/gluetun/
+/tailscale/
+
+# Tooling output
+repomix-output.xml
 
 .DS_Store
 ._*
-
-____deneme___

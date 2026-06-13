@@ -38,6 +38,12 @@ iptables -A FORWARD -d 100.64.0.0/10 -i tun0 -m state --state RELATED,ESTABLISHE
 # NAT all traffic going out through tun0 (the VPN interface)
 iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
 
+# Kill switch (fail-closed): forwarded client traffic may ONLY exit via tun0.
+# The FORWARD policy is already DROP, but this makes the intent explicit and
+# guards against any future ACCEPT rule accidentally opening an eth0 egress
+# path while the VPN is down/reconnecting.
+iptables -A FORWARD -i eth0 ! -o tun0 -j DROP
+
 echo "Gluetun routing setup complete!"
 echo ""
 echo "Current FORWARD rules:"
