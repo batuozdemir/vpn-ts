@@ -26,6 +26,10 @@ services:
       - FIREWALL=off
       # Control server (used by the health check and the country switcher).
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      # Gluetun v3.39.1+ requires auth on all control server routes by default.
+      # Since port 8000 is only reachable from within the internal docker network
+      # (172.28.0.0/24) and never exposed to the host or internet, no-auth is safe.
+      - HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"none"}
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv6.conf.all.forwarding=1
@@ -70,14 +74,14 @@ services:
     build: ./switcher
     container_name: vpn-switcher
     environment:
-      - ENV_FILE=/project/.env
-      - COMPOSE_FILE=/project/docker-compose.yml
+      - ENV_FILE=${PWD}/.env
+      - COMPOSE_FILE=${PWD}/docker-compose.yml
       - COMPOSE_PROJECT_NAME=vpn-ts
       - GLUETUN_URL=http://172.28.0.2:8000
       - LISTEN=:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/project
+      - ${PWD}:${PWD}
     networks:
       vpn-net:
         ipv4_address: 172.28.0.4 # Static IP for the switcher (referenced by tailscale serve)
