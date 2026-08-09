@@ -56,13 +56,23 @@ Getting one container to route through another, then through a VPN, depends on s
 
 5. **Auto-restart on connectivity loss.** `healthcheck.sh` pings `1.1.1.1` every 60s (after a 15s initial delay); after 3 consecutive failures it `kill 1`s gluetun's PID 1 so Docker's `restart: unless-stopped` recreates the container and re-runs the entrypoint.
 
-6. **Peer-to-peer tailnet traffic bypasses the VPN** — only exit-node (general internet) traffic is policy-routed through gluetun; the `100.64.0.0/10` MASQUERADE rules target that egress specifically.
+6. **Image tags are asymmetric on purpose.** `tailscale` tracks `stable` and is
+   re-pulled weekly by a systemd timer on the host (`deploy/`, installed to
+   `/usr/local/bin` + `/etc/systemd/system`). `gluetun` is pinned to a **digest**
+   and is only bumped by hand, because its custom entrypoint depends on upstream
+   behavior and the switcher recreates it on every country change. Tailscale's
+   own `tailscale set --auto-update` is not an option inside a container: the
+   updated binary lands in the writable layer and is lost on recreate.
+
+7. **Peer-to-peer tailnet traffic bypasses the VPN** — only exit-node (general internet) traffic is policy-routed through gluetun; the `100.64.0.0/10` MASQUERADE rules target that egress specifically.
 
 ### Where to make changes
 
 - VPN provider / region / WireGuard settings → `docker-compose.yml` env + `.env`.
 - Routing / NAT / firewall / DNS behavior → `setup-gluetun.sh` (VPN side) and `start-tailscale.sh` (tailnet side).
 - Restart/health behavior → `healthcheck.sh`.
+- Container update cadence → `deploy/vpn-ts-update.{sh,service,timer}` and the
+  image tags in `docker-compose.yml`.
 - Country switcher → `switcher/main.go` (allow-list, env rewrite, compose recreate). `COMPOSE_PROJECT_NAME` in the switcher service must match the stack's compose project name or it will create duplicate containers instead of recreating gluetun.
 
 A prior audit of this repo lives in `AUDIT.md` (findings + the feature design that produced the switcher).

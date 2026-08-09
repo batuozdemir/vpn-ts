@@ -1,0 +1,8 @@
+[Unit]
+Description=vpn-ts: update the tailscale container
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vpn-ts-update.sh

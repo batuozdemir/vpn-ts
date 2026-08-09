@@ -37,6 +37,7 @@ docker exec gluetun wget -qO- https://ifconfig.co
 - `gluetun-entrypoint.sh` - Auto-applies iptables on startup
 - `healthcheck.sh` - Verifies tunnel state + connectivity, restarts on failure
 - `switcher/` - Go web app to change exit country from the tailnet
+- `deploy/` - Host-side update script + systemd timer (installed on the VPS)
 
 ## Country switcher (web UI)
 
@@ -56,6 +57,39 @@ Requirements:
   to `vpn-ts`). Otherwise the switcher would create new containers instead of
   recreating the running gluetun.
 - The switcher mounts the docker socket; keep it tailnet-locked.
+
+## Keeping Tailscale up to date
+
+The tailscale container tracks the `stable` tag, and a **weekly systemd timer on
+the host** re-pulls it and recreates the container (`deploy/`). Tailscale state
+lives in the mounted `./tailscale` volume, so recreating never needs the auth key
+again, and `start-tailscale.sh` re-applies routing, NAT and `tailscale serve`.
+
+`tailscale set --auto-update` is **not** usable here: inside a container the
+updated binary is written to the writable layer, which is discarded on every
+recreate (and this stack recreates containers often).
+
+```bash
+# Update now, by hand
+docker compose pull tailscale && docker compose up -d tailscale
+docker exec tailscale tailscale version
+
+# Install / inspect the weekly timer -- see deploy/README.md
+sudo systemctl start vpn-ts-update.service
+journalctl -u vpn-ts-update.service -n 50
+```
+
+**Gluetun is deliberately pinned to a digest** in `docker-compose.yml` and is
+*not* auto-updated: its custom entrypoint depends on upstream behaviour, and the
+switcher recreates the container on every country change. Bump it by hand:
+
+```bash
+docker pull qmcgaw/gluetun:latest
+docker image inspect qmcgaw/gluetun:latest --format '{{index .RepoDigests 0}}'
+# put that digest in docker-compose.yml, then:
+docker compose up -d gluetun
+# and re-verify egress IP + DNS leak (see "Verifying after deploy")
+```
 
 ## Usage from Client
 
@@ -89,6 +123,7 @@ preventing DNS leaks via the VPS IP.
 - ✅ Fail-closed kill switch (client traffic only exits via the VPN)
 - ✅ Auto-restart on health-check failure (tunnel state + connectivity)
 - ✅ Change exit country from the tailnet web UI
+- ✅ Tailscale container auto-updated weekly (gluetun pinned on purpose)
 
 ## Verifying after deploy
 

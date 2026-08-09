@@ -1,7 +1,10 @@
 # docker-compose.yml
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    # Pinned to the digest that was running when this stack was last verified.
+    # Left floating, the switcher (which recreates gluetun) could pull a breaking
+    # upstream release unattended. Bump deliberately, then re-verify routing.
+    image: qmcgaw/gluetun@sha256:10b4895fde4499c2d1d9fbd8e681d040ede0efe8c6cfe5d0c51daf0461836ee8
     container_name: gluetun
     cap_add:
       - NET_ADMIN
@@ -39,7 +42,11 @@ services:
     restart: unless-stopped
 
   tailscale:
-    image: tailscale/tailscale:latest
+    # `stable` is the tag Tailscale recommends for container installs. The image
+    # is re-pulled weekly by deploy/vpn-ts-update.sh (systemd timer on the host);
+    # `tailscale set --auto-update` does not work in a container, since the
+    # updated binary lands in the writable layer and is lost on recreate.
+    image: tailscale/tailscale:stable
     container_name: tailscale
     cap_add:
       - NET_ADMIN
