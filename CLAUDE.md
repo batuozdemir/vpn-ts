@@ -38,7 +38,7 @@ Three containers on a static bridge network `vpn-net` (172.28.0.0/24):
 
 Traffic path: tailnet client → `tailscale0` in the tailscale container → (policy routing table 100) → gluetun `eth0` → gluetun `tun0` → ProtonVPN → internet.
 
-Single-app path (no exit node): gluetun's built-in HTTP proxy listens on `:8888` and the tailscale container publishes it to the tailnet with `tailscale serve --tcp 8888`. A client points one app at `<TS_HOSTNAME>:8888` (wirefox does this for a Firefox profile). The proxy's own traffic leaves through `tun0`, so it follows the switcher's country like the exit node does.
+Single-app path (no exit node): gluetun's built-in HTTP proxy listens on `:8888` and the tailscale container publishes it to the tailnet with a kernel DNAT (`tailscale0:8888` → `172.28.0.2:8888`). Not `tailscale serve --tcp`: that terminates the client's TCP in tailscaled's userspace stack and measured 4-5x slower over a 56 ms path. A client points one app at `<TS_HOSTNAME>:8888` (wirefox does this for a Firefox profile). The proxy's own traffic leaves through `tun0`, so it follows the switcher's country like the exit node does.
 
 Exit-node **DNS** is forced through the VPN too: the tailscale container uses public resolvers and fwmarks port-53 traffic (`ip rule fwmark 0x1 lookup 100`) so DNS doesn't leak via the VPS IP. Because of this, `start-tailscale.sh` waits for gluetun's control server to report `running` before `tailscale up` (its control-plane DNS now depends on the VPN).
 

@@ -101,8 +101,11 @@ tailscale serve --bg --https=443 "http://${SWITCHER_IP}:${SWITCHER_PORT}" || \
 # --- Expose gluetun's HTTP proxy over the tailnet (TCP, tailnet-only) --------
 # Clients point a single app at ${TS_HOSTNAME}:8888 instead of using the exit
 # node. Who may connect is decided by the tailnet ACL, like the switcher.
-echo "Configuring tailscale serve tcp 8888 -> ${GLUETUN_IP}:8888"
-tailscale serve --bg --tcp 8888 "tcp://${GLUETUN_IP}:8888" || \
-  echo "WARN: 'tailscale serve --tcp 8888' failed"
+# A kernel DNAT, not `tailscale serve --tcp`: serve terminates the client's TCP
+# in tailscaled's userspace stack, which measured 20-23 Mbit/s from a client
+# 56 ms away against 88-125 Mbit/s through this rule (2026-10-10). The FORWARD
+# and MASQUERADE rules above already carry the forwarded connection.
+iptables -t nat -A PREROUTING -i tailscale0 -p tcp --dport 8888 \
+  -j DNAT --to-destination ${GLUETUN_IP}:8888
 
 wait $DAEMON_PID
