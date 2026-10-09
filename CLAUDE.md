@@ -38,13 +38,15 @@ Three containers on a static bridge network `vpn-net` (172.28.0.0/24):
 
 Traffic path: tailnet client → `tailscale0` in the tailscale container → (policy routing table 100) → gluetun `eth0` → gluetun `tun0` → ProtonVPN → internet.
 
+Single-app path (no exit node): gluetun's built-in HTTP proxy listens on `:8888` and the tailscale container publishes it to the tailnet with `tailscale serve --tcp 8888`. A client points one app at `<TS_HOSTNAME>:8888` (wirefox does this for a Firefox profile). The proxy's own traffic leaves through `tun0`, so it follows the switcher's country like the exit node does.
+
 Exit-node **DNS** is forced through the VPN too: the tailscale container uses public resolvers and fwmarks port-53 traffic (`ip rule fwmark 0x1 lookup 100`) so DNS doesn't leak via the VPS IP. Because of this, `start-tailscale.sh` waits for gluetun's control server to report `running` before `tailscale up` (its control-plane DNS now depends on the VPN).
 
 ### The critical, non-obvious pieces
 
 Getting one container to route through another, then through a VPN, depends on several settings that must agree. When debugging connectivity, check these first:
 
-1. **Gluetun's built-in firewall is disabled** (`FIREWALL=off` in `docker-compose.yml`). All firewall/NAT rules are applied manually by the scripts instead. `FIREWALL_OUTBOUND_SUBNETS=172.28.0.0/24,100.64.0.0/10` still allows the docker subnet and the Tailscale CGNAT range to talk to gluetun even while gluetun's own rules are managed manually.
+1. **`FIREWALL=off` is set, but gluetun's own firewall is still active** in the pinned image (measured 2026-10-10: `INPUT` and `OUTPUT` policy `DROP`, output allowed only via `tun0`, to the docker subnet and Tailscale range, and UDP to the WireGuard endpoint). The forwarding/NAT rules for exit traffic are applied by the scripts. `FIREWALL_OUTBOUND_SUBNETS=172.28.0.0/24,100.64.0.0/10` is what lets the docker subnet and the Tailscale CGNAT range talk to gluetun. That `OUTPUT` policy is also what keeps the built-in HTTP proxy (below) from leaking via the VPS IP when the tunnel is down.
 
 2. **Custom entrypoints wrap the stock images.** Both containers override `entrypoint`:
    - `gluetun-entrypoint.sh` starts gluetun's real entrypoint in the background, waits for `tun0`, then runs `setup-gluetun.sh` (forwarding + MASQUERADE rules) and launches `healthcheck.sh`.

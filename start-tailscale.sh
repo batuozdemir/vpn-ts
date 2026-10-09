@@ -98,4 +98,11 @@ echo "Configuring tailscale serve -> http://${SWITCHER_IP}:${SWITCHER_PORT}"
 tailscale serve --bg --https=443 "http://${SWITCHER_IP}:${SWITCHER_PORT}" || \
   echo "WARN: 'tailscale serve' failed (is HTTPS enabled for the tailnet?)"
 
+# --- Expose gluetun's HTTP proxy over the tailnet (TCP, tailnet-only) --------
+# Clients point a single app at ${TS_HOSTNAME}:8888 instead of using the exit
+# node. Who may connect is decided by the tailnet ACL, like the switcher.
+echo "Configuring tailscale serve tcp 8888 -> ${GLUETUN_IP}:8888"
+tailscale serve --bg --tcp 8888 "tcp://${GLUETUN_IP}:8888" || \
+  echo "WARN: 'tailscale serve --tcp 8888' failed"
+
 wait $DAEMON_PID

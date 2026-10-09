@@ -123,6 +123,7 @@ preventing DNS leaks via the VPS IP.
 - ✅ Fail-closed kill switch (client traffic only exits via the VPN)
 - ✅ Auto-restart on health-check failure (tunnel state + connectivity)
 - ✅ Change exit country from the tailnet web UI
+- ✅ HTTP proxy on `<TS_HOSTNAME>:8888` (tailnet only) for routing a single app through the VPN without an exit node
 - ✅ Tailscale container auto-updated weekly (gluetun pinned on purpose)
 
 ## Verifying after deploy
