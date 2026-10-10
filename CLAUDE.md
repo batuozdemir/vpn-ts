@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Docker Compose stack that turns a host into a **Tailscale exit node whose traffic is routed through a Gluetun VPN** (ProtonVPN via WireGuard). Clients on the tailnet select this exit node and their internet traffic egresses through the VPN. There is no application code, build step, or test suite — it is shell scripts plus container orchestration.
 
+status: running on vps-fr as exit node plus tailnet-only HTTP proxy on `:8888`, the proxy published with a kernel DNAT since 2026-10-10; wirefox is its client; no open work recorded
+
 ## Commands
 
 ```bash
